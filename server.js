@@ -1,4 +1,3 @@
-// server.js
 require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
@@ -11,8 +10,38 @@ const app = express();
 
 // --- Middleware ---
 app.use(helmet());
-app.use(cors());
+
+app.use(
+  cors({
+    origin: [
+      "http://localhost:5173",
+      "https://taskify-frontend-eta.vercel.app"
+    ],
+    methods: ["GET", "POST", "PUT", "DELETE"],
+    allowedHeaders: ["Content-Type", "Authorization"],
+  })
+);
+
 app.use(express.json());
+
+// --- Ensure DB Connection
+let isConnected = false;
+
+async function ensureDBConnection() {
+  if (!isConnected) {
+    await connectDB();
+    isConnected = true;
+  }
+}
+
+app.use(async (req, res, next) => {
+  try {
+    await ensureDBConnection();
+    next();
+  } catch (err) {
+    next(err);
+  }
+});
 
 // --- Routes ---
 app.use('/api/auth', authRoutes);
@@ -27,25 +56,4 @@ app.use((err, req, res, next) => {
   });
 });
 
-// --- Connect to DB (for serverless) ---
-let isConnected = false; // prevent DB reconnects in serverless
-
-async function ensureDBConnection() {
-  if (!isConnected) {
-    await connectDB();
-    isConnected = true;
-  }
-}
-
-// Wrap routes to ensure DB is connected
-app.use(async (req, res, next) => {
-  try {
-    await ensureDBConnection();
-    next();
-  } catch (err) {
-    next(err);
-  }
-});
-
-// Export the Express app (NO app.listen)
 module.exports = app;
