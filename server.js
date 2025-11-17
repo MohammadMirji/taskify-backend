@@ -3,16 +3,16 @@ require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const helmet = require('helmet');
-const { connectDB } = require('./config/db'); // Import connectDB from the exported object
+const { connectDB } = require('./config/db');
 const authRoutes = require('./src/routes/authRoutes');
 const taskRoutes = require('./src/routes/tasks.routes');
 
 const app = express();
 
 // --- Middleware ---
-app.use(helmet()); // Security headers
-app.use(cors());   // Enable CORS
-app.use(express.json()); // ✅ Parse JSON request bodies
+app.use(helmet());
+app.use(cors());
+app.use(express.json());
 
 // --- Routes ---
 app.use('/api/auth', authRoutes);
@@ -27,16 +27,25 @@ app.use((err, req, res, next) => {
   });
 });
 
-// --- Connect to DB and start server ---
-const PORT = process.env.PORT || 5000;
+// --- Connect to DB (for serverless) ---
+let isConnected = false; // prevent DB reconnects in serverless
 
-connectDB()
-  .then(() => {
-    app.listen(PORT, () =>
-      console.log(`🚀 Server running on port ${PORT} & connected to MongoDB`)
-    );
-  })
-  .catch((err) => {
-    console.error('DB connection error:', err);
-    process.exit(1);
-  });
+async function ensureDBConnection() {
+  if (!isConnected) {
+    await connectDB();
+    isConnected = true;
+  }
+}
+
+// Wrap routes to ensure DB is connected
+app.use(async (req, res, next) => {
+  try {
+    await ensureDBConnection();
+    next();
+  } catch (err) {
+    next(err);
+  }
+});
+
+// Export the Express app (NO app.listen)
+module.exports = app;
